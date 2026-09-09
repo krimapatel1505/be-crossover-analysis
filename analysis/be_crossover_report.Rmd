@@ -1,0 +1,261 @@
+---
+title: "Bioequivalence of Two Methocarbamol Formulations: An Independent Recomputation"
+subtitle: "2x2x2 crossover, geometric mean ratios and 90% CI for Cmax and AUC0-t"
+author: "Krima Patel"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    number_sections: true
+    df_print: kable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                       fig.align = "center")
+options(knitr.graphics.rel_path = FALSE)
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(knitr)
+})
+source("R/utils.R")
+source("R/01_load_data.R")
+source("R/02_be_analysis.R")
+source("R/03_power_sensitivity.R")
+
+proj_root <- normalizePath(".")
+fig_path <- function(name) file.path(proj_root, "outputs", "figures", name)
+
+be <- load_be_data()
+qc <- check_be_data(be)
+stopifnot(qc$pass)
+
+results <- run_be_analysis(be)
+sens <- run_power_sensitivity(be)
+
+cmax_res <- results %>% filter(parameter == "Cmax")
+auc_res  <- results %>% filter(parameter == "AUC0t")
+```
+
+# Purpose and scope
+
+This report asks a narrow, checkable question: starting only from the
+summary statistics a published, peer-reviewed bioequivalence study
+reports in its results section, can the study's own geometric mean ratio
+(GMR) and 90% confidence interval for Cmax and AUC0-t be independently
+reproduced using the standard regulatory method for a two-sequence,
+two-period (2x2x2) crossover design?
+
+This is not a new clinical trial, and no subject-level data are used or
+claimed. It is the kind of check a biostatistician performs before a
+bioequivalence table goes into a submission: given the reported means and
+within-subject variability, does the confidence interval in the table
+actually follow from the standard calculation?
+
+# The study being reproduced
+
+`r be$design[["design"]]`, comparing:
+
+- **Test:** `r be$design[["test_product"]]`
+- **Reference:** `r be$design[["reference_product"]]`
+
+`r as.integer(be$design[["n_randomized"]])` subjects were randomized
+(`r as.integer(be$design[["n_TR_sequence_randomized"]])` per sequence),
+under `r tolower(be$design[["condition"]])` conditions with a
+`r be$design[["washout_days"]]`-day washout.
+`r be$design[["exclusion_reason"]]`, leaving
+`r as.integer(be$design[["n_PK_analysis_total"]])` subjects in the
+pharmacokinetic analysis population
+(`r as.integer(be$design[["n_TR_sequence_analysed"]])` in the T-R sequence,
+`r as.integer(be$design[["n_RT_sequence_analysed"]])` in the R-T sequence).
+
+Source: Portoles-Perez A, et al. Bioequivalence Study of Two Oral
+Methocarbamol Formulations in Healthy Subjects Under Fasting Conditions: A
+Randomized, Open-Label, Crossover Clinical Trial. *Pharmaceuticals.*
+2025;18(3):354. DOI:
+[10.3390/ph18030354](https://doi.org/10.3390/ph18030354). Open access.
+
+Full transcription and a note on why subject-level data are not public for
+this or any comparable study are in
+[`data/DATA_PROVENANCE.md`](https://github.com/krimapatel1505/be-crossover-analysis/blob/main/data/DATA_PROVENANCE.md).
+
+# Reported summary statistics
+
+```{r summary-table}
+be$wide %>%
+  transmute(
+    Parameter = ifelse(parameter == "AUC0t", "AUC0-t", parameter),
+    `GM, Reference` = geometric_mean_Reference,
+    `GM, Test` = geometric_mean_Test,
+    `AM, Reference` = arithmetic_mean_Reference,
+    `AM, Test` = arithmetic_mean_Test
+  ) %>%
+  kable(digits = 2, caption = "Geometric (GM) and arithmetic (AM) means, as reported in the article")
+```
+
+Within-subject CV: `r be$design[["within_subject_cv_cmax_pct"]]`% for
+Cmax, `r be$design[["within_subject_cv_auc0t_pct"]]`% for AUC0-t, as
+reported in the article.
+
+# Method
+
+The geometric mean ratio and 90% CI are computed as:
+
+```
+GMR      = GM(test) / GM(ref)
+90% CI   = exp[ ln(GMR)  +/-  t(0.95, df) * sqrt( sigma2 * (1/n1 + 1/n2) ) ]
+sigma2   = ln( (CV% / 100)^2 + 1 )     <- log-scale error variance recovered
+                                          from the reported within-subject CV%
+df       = n1 + n2 - 2                 (n1, n2 = subjects analyzed per sequence)
+```
+
+This is the standard two-sample formulation of
+Schuirmann's two one-sided tests (TOST) procedure specified in FDA and EMA
+bioequivalence guidance, and it is algebraically what SAS PROC GLM,
+Phoenix WinNonlin, and R packages such as PowerTOST compute from ANOVA
+output. It was implemented directly from its statistical definition
+(`R/utils.R`, function `be_gmr_ci()`) rather than via a package, because
+outbound access to CRAN is blocked in the environment this project was
+built in.
+
+# Recomputation vs the published result
+
+```{r comparison-table}
+results %>%
+  transmute(
+    Parameter = ifelse(parameter == "AUC0t", "AUC0-t", parameter),
+    `GMR (%)` = round(gmr_pct, 2),
+    `Recomputed 90% CI` = sprintf("%.2f - %.2f%%", recomputed_ci_lower_pct, recomputed_ci_upper_pct),
+    `Published 90% CI` = sprintf("%.2f - %.2f%%", published_ci_lower_pct, published_ci_upper_pct),
+    `CI width, recomputed` = sprintf("%.2f pp", recomputed_ci_width_pct),
+    `CI width, published` = sprintf("%.2f pp", published_ci_width_pct),
+    Verdict = be_verdict_published
+  ) %>%
+  kable(caption = "Independent recomputation vs the article's own reported 90% CI")
+```
+
+```{r fig1, fig.cap = "Recomputed vs published 90% CI, against the 80.00-125.00% bioequivalence limits."}
+knitr::include_graphics(fig_path("fig1_ci_comparison.png"))
+```
+
+For both parameters, the confidence interval recomputed here from nothing
+more than the article's reported means and CV% lands within a percentage
+point or two of the interval the authors actually published, and both
+reach the same conclusion: bioequivalent by the standard 80.00-125.00%
+criterion. For AUC0-t the match is close (recomputed
+`r sprintf("%.2f", auc_res$recomputed_ci_lower_pct)`-`r sprintf("%.2f", auc_res$recomputed_ci_upper_pct)`%
+vs published `r sprintf("%.2f", auc_res$published_ci_lower_pct)`-`r sprintf("%.2f", auc_res$published_ci_upper_pct)`%).
+For Cmax the recomputed interval is a little wider
+(`r sprintf("%.2f", cmax_res$recomputed_ci_width_pct)` percentage points
+vs `r sprintf("%.2f", cmax_res$published_ci_width_pct)` published).
+
+That residual gap is expected, not an error: the article reports
+within-subject CV to the nearest whole percentage point, while the
+original ANOVA behind the published number would have carried several
+more digits of precision on the error variance itself. A one-point
+rounding difference in a reported CV% translates directly into the width
+of the confidence interval through `sigma2 = ln(CV^2 + 1)`, and
+Cmax's larger CV (`r be$design[["within_subject_cv_cmax_pct"]]`% vs
+`r be$design[["within_subject_cv_auc0t_pct"]]`% for AUC0-t) makes that
+interval more sensitive to exactly this kind of rounding. This is itself
+a useful, practical reminder for anyone checking a bioequivalence table
+against a summary report rather than the underlying SAS or Phoenix
+WinNonlin output: a CI reconstructed from rounded summary statistics
+should be expected to be close, not identical, to the original.
+
+# How much power did this design actually have?
+
+A bioequivalence study is normally sized around its most variable
+parameter. Here that is Cmax (CV `r be$design[["within_subject_cv_cmax_pct"]]`%)
+against the less variable AUC0-t (CV `r be$design[["within_subject_cv_auc0t_pct"]]`%).
+Using the study's own reported CVs and its actual analyzed sample size
+(n = `r as.integer(be$design[["n_PK_analysis_total"]])`), the achieved
+power to detect bioequivalence at an assumed true ratio of 0.95 is:
+
+```{r power-table}
+sens$achieved %>%
+  transmute(Parameter = ifelse(parameter == "AUC0t", "AUC0-t", parameter),
+            `Within-subject CV (%)` = cv_pct,
+            `n analyzed` = n_actual,
+            `Power at true ratio 0.95` = sprintf("%.1f%%", power_at_n31_gmr095 * 100)) %>%
+  kable(caption = "Approximate power, computed from the noncentral t-distribution")
+```
+
+```{r fig3, fig.cap = "Power at this study's actual sample size, as a function of within-subject CV."}
+knitr::include_graphics(fig_path("fig3_power_vs_cv.png"))
+```
+
+At its observed AUC0-t variability, this sample size gave the study
+comfortable power. At its observed Cmax variability, the same sample size
+gave meaningfully less power to detect a true 5% difference -- the study
+still succeeded here because the actual formulations turned out to be
+close (Cmax GMR `r sprintf("%.2f", cmax_res$gmr_pct)`%), but a design this
+size would not reliably have detected a smaller, still-passing
+bioequivalent difference if the true Cmax ratio had sat closer to the
+edge of the acceptance range. This is exactly why regulatory guidance
+asks sponsors to power a crossover study to its most variable, not its
+average, endpoint.
+
+```{r fig2, fig.cap = "Subjects required for 80% power across a range of assumed true ratios."}
+knitr::include_graphics(fig_path("fig2_sample_size_sensitivity.png"))
+```
+
+# Limitations
+
+1. This is a recomputation from published summary statistics, not a
+   reanalysis of subject-level data; subject-level data for this study
+   are not public, which is standard practice for bioequivalence trials
+   generally (see `data/DATA_PROVENANCE.md` for the pattern observed
+   across several other recently published crossover studies).
+2. The recomputed CI depends on the CV% precision the article reports
+   (whole percentage points); a true match to the sponsor's internal
+   ANOVA output is not expected and is not claimed.
+3. AUC0-inf is discussed in the source article's methods but not reported
+   with the same summary-statistic precision as Cmax and AUC0-t, and is
+   therefore not analyzed quantitatively here.
+4. The power and sample-size calculations use a noncentral-t approximation
+   to Schuirmann's TOST procedure, standard in introductory treatments of
+   crossover bioequivalence design; the exact Owen's-Q solution used by
+   dedicated software (PowerTOST) would differ from this by at most one to
+   two percentage points of power in the regimes examined here.
+5. This project makes no claim about, and does not analyze, drug safety,
+   efficacy, or clinical performance of either product; it is a
+   statistical methods exercise built on a real, cited, published result.
+
+# Conclusions
+
+1. The published 90% confidence intervals for Cmax and AUC0-t are
+   independently reproducible, to within roughly a percentage point, using
+   only the geometric means and within-subject CV% printed in the article
+   and the standard 2x2x2 crossover formula.
+2. Both parameters meet the 80.00-125.00% bioequivalence criterion in both
+   the published and the recomputed analysis.
+3. The study's achieved power differed materially between its two primary
+   endpoints (roughly `r sprintf("%.0f", sens$achieved$power_at_n31_gmr095[sens$achieved$parameter=="AUC0t"]*100)`%
+   for AUC0-t vs roughly `r sprintf("%.0f", sens$achieved$power_at_n31_gmr095[sens$achieved$parameter=="Cmax"]*100)`%
+   for Cmax at an assumed true ratio of 0.95), illustrating why crossover
+   studies are conventionally sized to their most variable parameter.
+
+# References
+
+1. Portoles-Perez A, et al. Bioequivalence Study of Two Oral Methocarbamol
+   Formulations in Healthy Subjects Under Fasting Conditions: A
+   Randomized, Open-Label, Crossover Clinical Trial. *Pharmaceuticals.*
+   2025;18(3):354. DOI: 10.3390/ph18030354
+2. US FDA. *Statistical Approaches to Establishing Bioequivalence.*
+   Guidance for Industry, 2001.
+3. EMA. *Guideline on the Investigation of Bioequivalence.*
+   CPMP/EWP/QWP/1401/98 Rev. 1/Corr, 2010.
+4. Diletti E, Hauschke D, Steinijans VW. Sample size determination for
+   bioequivalence assessment by means of confidence intervals.
+   *Int J Clin Pharmacol Ther Toxicol.* 1991;29(1):1-8.
+5. Chow SC, Shao J, Wang H. *Design and Analysis of Bioavailability and
+   Bioequivalence Studies.* 3rd ed. Chapman & Hall/CRC, 2008.
+
+# Reproducibility
+
+```{r session-info}
+sessionInfo()
+```

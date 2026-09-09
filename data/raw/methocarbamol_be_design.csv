@@ -1,0 +1,22 @@
+field,value
+drug,Methocarbamol
+test_product,"Methocarbamol 1500 mg tablet (1 x 1500 mg), test formulation"
+reference_product,"Robaxin 500 mg tablets (3 x 500 mg = 1500 mg), reference formulation"
+design,"Single-center, phase I, randomized, open-label, two-sequence two-period crossover"
+sequences,"T-R and R-T"
+washout_days,7
+condition,Fasting
+n_randomized,32
+n_TR_sequence_randomized,16
+n_RT_sequence_randomized,16
+n_PK_analysis_total,31
+n_TR_sequence_analysed,15
+n_RT_sequence_analysed,16
+exclusion_reason,"1 subject in T-R sequence spat out part of the Test dose and was excluded from the PK analysis population"
+demographics,"32 subjects randomized; 15 male (46.9%), 17 female (53.1%); all Caucasian; age 18-50 years"
+within_subject_cv_cmax_pct,24
+within_subject_cv_auc0t_pct,13
+reported_gmr_cmax_ci90_low_pct,91.67
+reported_gmr_cmax_ci90_high_pct,112.47
+reported_gmr_auc0t_ci90_low_pct,92.34
+reported_gmr_auc0t_ci90_high_pct,103.47

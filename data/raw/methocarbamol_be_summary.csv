@@ -1,0 +1,5 @@
+parameter,treatment,arithmetic_mean,geometric_mean,units
+Cmax,Reference,31.72,29.96,ug/mL
+Cmax,Test,32.39,30.51,ug/mL
+AUC0t,Reference,90.25,84.75,h*ug/mL
+AUC0t,Test,89.72,83.07,h*ug/mL

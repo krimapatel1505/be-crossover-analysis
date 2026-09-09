@@ -1,0 +1,3 @@
+"parameter","gm_test","gm_ref","within_subject_cv_pct","n1","n2","df","gmr_pct","recomputed_ci_lower_pct","recomputed_ci_upper_pct","published_ci_lower_pct","published_ci_upper_pct","recomputed_ci_width_pct","published_ci_width_pct","be_verdict_recomputed","be_verdict_published"
+"Cmax",30.51,29.96,24,15,16,29,101.835781041389,91.0877399785886,113.852054104618,91.67,112.47,22.7643141260292,20.8,"Bioequivalent","Bioequivalent"
+"AUC0t",83.07,84.75,13,15,16,29,98.0176991150442,92.21586589617,104.184559201828,92.34,103.47,11.9686933056579,11.13,"Bioequivalent","Bioequivalent"

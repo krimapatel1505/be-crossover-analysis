@@ -1,0 +1,8 @@
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+analysis/*_files/
+analysis/*.knit.md
+analysis/*.utf8.md
+.DS_Store
